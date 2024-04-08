@@ -17,21 +17,19 @@ class RconDriver implements DriverInterface
         if (!$server->rcon)
             throw new BadConfigurationException("Server $server->name rcon empty");
 
-        if (!isset ($additional['command']))
+        if (!isset($additional['command']))
             throw new BadConfigurationException('command');
 
         $command = $additional['command'];
         $steam = false;
 
-        if (preg_match('/{{steam32}}|{{steam64}}/i', $command)) {
-            foreach ($user->socialNetworks as $socialNetwork) {
-                if ($socialNetwork->socialNetwork->key === 'Steam') {
-                    $steam = $socialNetwork->value;
-                }
-            }
+        if (preg_match('/{{steam32}}|{{steam64}}|{{accountId}}/i', $command)) {
+            $steam = $user->getSocialNetwork('Steam') ?? $user->getSocialNetwork('HttpsSteam');
 
             if (!$steam)
                 throw new UserSocialException("Steam");
+
+            $steam = $steam->value;
         }
 
         try {
@@ -56,19 +54,23 @@ class RconDriver implements DriverInterface
     {
         $steam32 = '';
         $steam64 = '';
+        $accountId = '';
 
         if ($steam) {
             $steamClass = steam()->steamid($steam);
             $steam32 = $steamClass->RenderSteam2();
             $steam64 = $steamClass->ConvertToUInt64();
+            $accountId = $steamClass->GetAccountID();
         }
 
         return str_replace([
             '{{steam32}}',
             '{{steam64}}',
+            '{{accountId}}'
         ], [
             $steam32,
-            $steam64
+            $steam64,
+            $accountId
         ], $command);
     }
 

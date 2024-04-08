@@ -3,45 +3,92 @@
 namespace Flute\Modules\GiveCore\Give\Drivers;
 
 use Flute\Core\Database\Entities\Server;
+use Flute\Core\Database\Entities\User;
 use Flute\Modules\GiveCore\Exceptions\BadConfigurationException;
 use Flute\Modules\GiveCore\Exceptions\UserSocialException;
 use Flute\Modules\GiveCore\Support\AbstractDriver;
+use Nette\Utils\Json;
 
 class VipDriver extends AbstractDriver
 {
-    public function deliver(\Flute\Core\Database\Entities\User $user, Server $server, array $additional = []): bool
+    private function validateAdditionalParams(array $additional, Server $server): array
     {
-        if (!$server->rcon)
-            throw new BadConfigurationException("Server $server->name rcon empty");
-
-        if (!isset ($additional['group']))
+        if (empty($additional['group'])) {
             throw new BadConfigurationException('group');
-
-        foreach ($user->socialNetworks as $socialNetwork) {
-            if ($socialNetwork->socialNetwork->key === 'Steam') {
-                $steam = $socialNetwork->value;
-            }
         }
 
-        if (!$steam)
+        $dbConnection = $server->getDbConnection('VIP');
+        if (!$dbConnection) {
+            throw new BadConfigurationException('db connection VIP is not exists');
+        }
+
+        $dbParams = Json::decode($dbConnection->additional);
+        if (empty($dbParams->sid)) {
+            throw new BadConfigurationException("SID {$server->name} for db connection is empty");
+        }
+
+        return [$dbConnection, $dbParams->sid];
+    }
+
+    private function updateOrInsertUser($db, $accountId, $sid, $group, $time, $user, $currentGroup = null)
+    {
+        $expiresTime = ($time === 0) ? 0 : ($currentGroup ? $currentGroup['expires'] + $time : time() + $time);
+        if ($currentGroup) {
+            $db->table('users')
+                ->update(['expires' => $expiresTime])
+                ->where('account_id', $accountId)
+                ->andWhere('sid', $sid)
+                ->run();
+        } else {
+            $db->insert('users')
+                ->values([
+                    'expires' => $expiresTime,
+                    'group' => $group,
+                    'account_id' => $accountId,
+                    'lastvisit' => time(),
+                    'sid' => $sid,
+                    'name' => $user->name,
+                ])
+                ->run();
+        }
+    }
+
+    public function deliver(User $user, Server $server, array $additional = []): bool
+    {
+        [$dbConnection, $sid] = $this->validateAdditionalParams($additional, $server);
+
+        $steam = $user->getSocialNetwork('Steam') ?? $user->getSocialNetwork('HttpsSteam');
+        if (!$steam) {
             throw new UserSocialException("Steam");
+        }
 
-        $sid = $additional['sid'] ?? 1;
+        $accountId = steam()->steamid($steam->value)->GetAccountID();
+        $group = $additional['group'];
+        $time = $additional['time'] ?? 0;
 
-        
+        $db = dbal()->database($dbConnection->dbname);
+        $dbusers = $db->table("users")->select()
+            ->where('account_id', $accountId)
+            ->andWhere('sid', $sid)
+            ->fetchAll();
 
-        $this->confirm('You already have a <span>VIP</span> group. Buying this will replace it with <span>VIP PREMIUM</span>. Do you agree?');
+        if (!empty($dbusers)) {
+            $dbuser = $dbusers[0];
 
-        // $select = $this->select([ 
-        //     [
-        //         'value' => 'test3',
-        //         'text' => 'Some text'
-        //     ],
-        //     [
-        //         'value' => 'test2',
-        //         'text' => 'Some text 2'
-        //     ],
-        // ], 'select_vip_server');
+            if ($dbuser['group'] === $group)
+                $this->confirm(__("givecore.add_time", [
+                    ':server' => $server->name
+                ]));
+            else
+                $this->confirm(__("givecore.replace_group", [
+                    ':group' => $dbuser['group'],
+                    ':newGroup' => $group
+                ]));
+
+            $this->updateOrInsertUser($db, $accountId, $sid, $group, $time, $user, $dbuser);
+        } else {
+            $this->updateOrInsertUser($db, $accountId, $sid, $group, $time, $user);
+        }
 
         return true;
     }

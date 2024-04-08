@@ -13,7 +13,7 @@ class GiveFactory
 {
     protected array $drivers = [
         'vip' => VipDriver::class,
-        'admin' => AdminDriver::class,
+        // 'admin' => AdminDriver::class,
         'rcon' => RconDriver::class
     ];
 
