@@ -39,7 +39,7 @@ class RconDriver implements DriverInterface
         } catch (\Exception $e) {
             throw new GiveDriverException($e->getMessage());
         } finally {
-            $query->Disconnect();
+            $query['query']->Disconnect();
         }
 
         return false;
@@ -74,7 +74,7 @@ class RconDriver implements DriverInterface
         ], $command);
     }
 
-    protected function sendCommand(string $ip, int $port, string $rcon, string $command): SourceQuery
+    protected function sendCommand(string $ip, int $port, string $rcon, string $command): array
     {
         $Query = new SourceQuery;
 
@@ -82,8 +82,11 @@ class RconDriver implements DriverInterface
         $Query->SetRconPassword($rcon);
 
         // We don't need a get result from the server
-        $Query->Rcon($rcon);
+        $RconResult = $Query->Rcon($command);
 
-        return $Query;
+        return [
+            'query' => $Query,
+            'rcon' => $RconResult
+        ];
     }
 }
