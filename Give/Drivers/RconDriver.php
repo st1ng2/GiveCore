@@ -33,7 +33,7 @@ class RconDriver implements DriverInterface
         }
 
         try {
-            $query = $this->sendCommand($server->ip, $server->port, $server->rcon, $this->replace($command, $steam));
+            $query = $this->sendCommand($server->ip, $server->port, $server->rcon, $this->replace($command, $steam, $user));
 
             return true;
         } catch (\Exception $e) {
@@ -50,7 +50,7 @@ class RconDriver implements DriverInterface
         return 'rcon';
     }
 
-    protected function replace(string $command, $steam): string
+    protected function replace(string $command, $steam, User $user): string
     {
         $steam32 = '';
         $steam64 = '';
@@ -66,11 +66,19 @@ class RconDriver implements DriverInterface
         return str_replace([
             '{{steam32}}',
             '{{steam64}}',
-            '{{accountId}}'
+            '{{accountId}}',
+            '{{login}}',
+            '{{name}}',
+            '{{email}}',
+            '{{uri}}'
         ], [
             $steam32,
             $steam64,
-            $accountId
+            $accountId,
+            $user->login,
+            $user->name,
+            $user->email,
+            $user->uri
         ], $command);
     }
 
