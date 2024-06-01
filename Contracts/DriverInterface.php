@@ -15,7 +15,7 @@ interface DriverInterface
      * 
      * @throws \Exception
      */
-    public function deliver( User $user, Server $server, array $additional = [] ) : bool;
+    public function deliver( User $user, Server $server, array $additional = [], ?int $timeId = null ) : bool;
 
     /**
      * Get the alias name for the system

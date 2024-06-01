@@ -8,7 +8,7 @@ use Flute\Modules\GiveCore\Contracts\DriverInterface;
 
 class AdminDriver implements DriverInterface
 {
-    public function deliver(User $user, Server $server, array $additional = []): bool
+    public function deliver(User $user, Server $server, array $additional = [], ?int $timeId = null): bool
     {
         return true;
     }

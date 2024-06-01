@@ -12,7 +12,7 @@ use xPaw\SourceQuery\SourceQuery;
 
 class RconDriver implements DriverInterface
 {
-    public function deliver(User $user, Server $server, array $additional = []): bool
+    public function deliver(User $user, Server $server, array $additional = [], ?int $timeId = null): bool
     {
         if (!$server->rcon)
             throw new BadConfigurationException("Server $server->name rcon empty");
@@ -20,10 +20,10 @@ class RconDriver implements DriverInterface
         if (!isset($additional['command']))
             throw new BadConfigurationException('command');
 
-        $command = $additional['command'];
+        $commands = explode(';', $additional['command']);
         $steam = false;
 
-        if (preg_match('/{{steam32}}|{{steam64}}|{{accountId}}/i', $command)) {
+        if (preg_match('/{{steam32}}|{{steam64}}|{{accountId}}/i', $additional['command'])) {
             $steam = $user->getSocialNetwork('Steam') ?? $user->getSocialNetwork('HttpsSteam');
 
             if (!$steam)
@@ -32,14 +32,24 @@ class RconDriver implements DriverInterface
             $steam = $steam->value;
         }
 
-        try {
-            $query = $this->sendCommand($server->ip, $server->port, $server->rcon, $this->replace($command, $steam, $user));
+        $query = new SourceQuery();
 
+        try {
+            $query->Connect($server->ip, $server->port, 3, ($server->mod == 10) ? SourceQuery::GOLDSOURCE : SourceQuery::SOURCE);
+            $query->SetRconPassword($server->rcon);
+
+            foreach ($commands as $command) {
+                $command = trim($command);
+                if (empty($command)) {
+                    continue;
+                }
+                $this->sendCommand($query, $this->replace($command, $steam, $user));
+            }
             return true;
         } catch (\Exception $e) {
             throw new GiveDriverException($e->getMessage());
         } finally {
-            $query['query']->Disconnect();
+            $query->Disconnect();
         }
 
         return false;
@@ -82,19 +92,8 @@ class RconDriver implements DriverInterface
         ], $command);
     }
 
-    protected function sendCommand(string $ip, int $port, string $rcon, string $command): array
+    protected function sendCommand(SourceQuery $query, string $command): void
     {
-        $Query = new SourceQuery;
-
-        $Query->Connect($ip, $port);
-        $Query->SetRconPassword($rcon);
-
-        // We don't need a get result from the server
-        $RconResult = $Query->Rcon($command);
-
-        return [
-            'query' => $Query,
-            'rcon' => $RconResult
-        ];
+        $query->Rcon($command);
     }
 }

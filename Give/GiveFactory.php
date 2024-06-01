@@ -22,12 +22,12 @@ class GiveFactory
         return $this->drivers;
     }
 
-    public function make(string $name, User $user, Server $server, array $additional = []): bool
+    public function make(string $name, User $user, Server $server, array $additional = [], ?int $timeId = null): bool
     {
         if( !$this->exists($name) )
             throw new \Exception("Driver '$name' is not exists");
 
-        return (new $this->drivers[$name])->deliver($user, $server, $additional);
+        return (new $this->drivers[$name])->deliver($user, $server, $additional, $timeId);
     }
 
     public function add(string $class) : self

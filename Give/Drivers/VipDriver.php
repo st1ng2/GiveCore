@@ -11,6 +11,52 @@ use Nette\Utils\Json;
 
 class VipDriver extends AbstractDriver
 {
+
+    public function deliver(User $user, Server $server, array $additional = [], ?int $timeId = null): bool
+    {
+        [$dbConnection, $sid] = $this->validateAdditionalParams($additional, $server);
+
+        $steam = $user->getSocialNetwork('Steam') ?? $user->getSocialNetwork('HttpsSteam');
+        if (!$steam) {
+            throw new UserSocialException("Steam");
+        }
+
+        $accountId = steam()->steamid($steam->value)->GetAccountID();
+        $group = $additional['group'];
+        $time = !$timeId ? ($additional['time'] ?? 0) : $timeId;
+
+        $db = dbal()->database($dbConnection->dbname);
+        $dbusers = $db->table("users")->select()
+            ->where('account_id', $accountId)
+            ->andWhere('sid', $sid)
+            ->fetchAll();
+
+        if (!empty($dbusers)) {
+            $dbuser = $dbusers[0];
+
+            if ($dbuser['group'] === $group)
+                $this->confirm(__("givecore.add_time", [
+                    ':server' => $server->name
+                ]));
+            else
+                $this->confirm(__("givecore.replace_group", [
+                    ':group' => $dbuser['group'],
+                    ':newGroup' => $group
+                ]));
+
+            $this->updateOrInsertUser($db, $accountId, $sid, $group, $time, $user, $dbuser);
+        } else {
+            $this->updateOrInsertUser($db, $accountId, $sid, $group, $time, $user);
+        }
+
+        return true;
+    }
+
+    public function alias(): string
+    {
+        return 'vip';
+    }
+    
     private function validateAdditionalParams(array $additional, Server $server): array
     {
         if (empty($additional['group'])) {
@@ -51,50 +97,5 @@ class VipDriver extends AbstractDriver
                 ])
                 ->run();
         }
-    }
-
-    public function deliver(User $user, Server $server, array $additional = []): bool
-    {
-        [$dbConnection, $sid] = $this->validateAdditionalParams($additional, $server);
-
-        $steam = $user->getSocialNetwork('Steam') ?? $user->getSocialNetwork('HttpsSteam');
-        if (!$steam) {
-            throw new UserSocialException("Steam");
-        }
-
-        $accountId = steam()->steamid($steam->value)->GetAccountID();
-        $group = $additional['group'];
-        $time = $additional['time'] ?? 0;
-
-        $db = dbal()->database($dbConnection->dbname);
-        $dbusers = $db->table("users")->select()
-            ->where('account_id', $accountId)
-            ->andWhere('sid', $sid)
-            ->fetchAll();
-
-        if (!empty($dbusers)) {
-            $dbuser = $dbusers[0];
-
-            if ($dbuser['group'] === $group)
-                $this->confirm(__("givecore.add_time", [
-                    ':server' => $server->name
-                ]));
-            else
-                $this->confirm(__("givecore.replace_group", [
-                    ':group' => $dbuser['group'],
-                    ':newGroup' => $group
-                ]));
-
-            $this->updateOrInsertUser($db, $accountId, $sid, $group, $time, $user, $dbuser);
-        } else {
-            $this->updateOrInsertUser($db, $accountId, $sid, $group, $time, $user);
-        }
-
-        return true;
-    }
-
-    public function alias(): string
-    {
-        return 'vip';
     }
 }
